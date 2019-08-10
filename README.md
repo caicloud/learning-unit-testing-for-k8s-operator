@@ -8,6 +8,29 @@
 
 因此这一文档的受众是 Operator 开发者们，文档中为不同的实现方式（kubebuilder v1, v2, 原生实现）设计了不同的实验，配合实验阅读味道更佳。
 
+Table of Contents
+=================
+
+   * [learning-unit-testing-for-k8s-operator](#learning-unit-testing-for-k8s-operator)
+      * [为原生实现的 Operator 实现单元测试](#为原生实现的-operator-实现单元测试)
+         * [事先需要了解的知识](#事先需要了解的知识)
+         * [准备工作](#准备工作)
+         * [Operator 实现分析](#operator-实现分析)
+            * [Operator 的初始化](#operator-的初始化)
+            * [Sync 过程](#sync-过程)
+            * [单元测试](#单元测试)
+         * [Lab 1 实现单元测试](#lab-1-实现单元测试)
+            * [问题](#问题)
+            * [参考实现](#参考实现)
+         * [Lab 2 扩展内容：Table Driven Test](#lab-2-扩展内容table-driven-test)
+            * [背景知识](#背景知识)
+            * [问题](#问题-1)
+            * [参考实现](#参考实现-1)
+      * [为 kubebuilder v1 生成的 Operator 实现单元测试（TODO）](#为-kubebuilder-v1-生成的-operator-实现单元测试todo)
+      * [为 kubebuilder v2 生成的 Operator 实现单元测试（TODO）](#为-kubebuilder-v2-生成的-operator-实现单元测试todo)
+
+Created by [gh-md-toc](https://github.com/ekalinin/github-markdown-toc)
+
 ## 为原生实现的 Operator 实现单元测试
 
 原生实现的 Operator 实现单元测试的讲解与动手实验，是利用 [kubernetes/sample-controller a52d0d8](https://github.com/kubernetes/sample-controller/commit/a52d0d8c67c5addd613ec9082ed402f7f7c6579f) 作为示例展开的，为了实现动手实验的目的，修改了其单元测试 `controller_test.go` 中的内容。

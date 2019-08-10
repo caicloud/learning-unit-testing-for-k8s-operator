@@ -320,4 +320,11 @@ func TestAnonymousDeployment(t *testing.T) {
 	// --------------------------------------------------------
 }
 
+// TestController tests all controller-related test cases.
+func TestController(t *testing.T) {
+	// --------------------------------------------------------
+	// Lab 2: Please add the logic here.
+	// --------------------------------------------------------
+}
+
 func int32Ptr(i int32) *int32 { return &i }
