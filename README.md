@@ -239,6 +239,7 @@ func TestCreatesDeployment(t *testing.T) {
 func (f *fixture) run(fooName string) {
 	f.runController(fooName, true, false)
 }
+
 func (f *fixture) runController(fooName string, startInformers bool, expectError bool) {
 	c, i, k8sI := f.newController()
 	if startInformers {
@@ -285,6 +286,7 @@ func (f *fixture) runController(fooName string, startInformers bool, expectError
 		f.t.Errorf("%d additional expected actions:%+v", len(f.kubeactions)-len(k8sActions), f.kubeactions[len(k8sActions):])
 	}
 }
+
 func (f *fixture) newController() (*Controller, informers.SharedInformerFactory, kubeinformers.SharedInformerFactory) {
 	f.client = fake.NewSimpleClientset(f.objects...)
 	f.kubeclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
