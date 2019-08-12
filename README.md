@@ -182,7 +182,15 @@ func (c *Controller) syncHandler(key string) error {
 
 #### 单元测试
 
-为了实现单元测试，Foo Operator 对其进行了抽象：
+Operator 的实现依赖 clienset 和 informer，informer 用来订阅 apiserver 的事件，触发 operator 的同步操作。clientset 用来与 apiserver 交互，进行增删改查等操作。
+
+因此在进行单元测试时，需要把这两个依赖 fake 掉。为了在实现单元测试用例时，更方便地完成 Fake 的操作，Foo Operator 引入了一个专门用于测试的数据结构 `fixture`。
+
+首先，我们会介绍 `fixture` 的定义以及部分实现，接下来，会以一个测试用例作为示例，了解如何使用 `fixture` 简化测试用例的实现。
+
+##### fixture 结构
+
+fixture 的定义如下：
 
 ```go
 type fixture struct {
@@ -202,13 +210,85 @@ type fixture struct {
 }
 ```
 
-fixture 在测试中，代表的就是一个在运行的 Operator，其中 `client` 与 `kubeclient` 分别是 fake 的 client。
-
-`kubeobjects` 和 `objects` 是用来准备数据的。它们中的对象，会被添加到 `kubeclient` 和 `client` 中。这样的方式就可以完整地构建出期望的测试数据，并且通过 `kubeclient` 和 `client` 可以对测试数据进行 fake 操作。
+fixture 在测试中，代表的就是一个在运行的 Operator，其中 `client` 与 `kubeclient` 是 fake 的 client。
 
 `deploymentLister` 和 `fooLister` 会定义一系列 Deployment 和 Foo 实例，这些实例会被加入到 Informer 的 Indexer 中，以便发起 Sync 请求。
 
-`kubeactions` 和 `actions` 是对期望状态的描述，用来记录期望观测到的，作用在 `client` 与 `kubeclient` 上的调用。
+`kubeobjects` 和 `objects` 是用来构建期望的测试数据的。它们中的对象，会被添加到 `kubeclient` 和 `client` 中：
+
+```go
+	f := newFixture(t)
+	f.client = fake.NewSimpleClientset(f.objects...)
+	f.kubeclient = k8sfake.NewSimpleClientset(f.kubeobjects...)
+```
+
+`NewSimpleClientset` 的定义如下所示，它利用了一个非常简单的 object 跟踪机制，绕过了正常实现的 clienset 中的各种 validation 和 defaults。它会记录对跟着的 object 的增删改查操作。
+
+```go
+// NewSimpleClientset returns a clientset that will respond with the provided objects.
+// It's backed by a very simple object tracker that processes creates, updates and deletions as-is,
+// without applying any validations and/or defaults. It shouldn't be considered a replacement
+// for a real clientset and is mostly useful in simple unit tests.
+func NewSimpleClientset(objects ...runtime.Object) *Clientset {
+	o := testing.NewObjectTracker(scheme, codecs.UniversalDecoder())
+	for _, obj := range objects {
+		if err := o.Add(obj); err != nil {
+			panic(err)
+		}
+	}
+
+	cs := &Clientset{tracker: o}
+	cs.discovery = &fakediscovery.FakeDiscovery{Fake: &cs.Fake}
+	cs.AddReactor("*", "*", testing.ObjectReaction(o))
+	cs.AddWatchReactor("*", func(action testing.Action) (handled bool, ret watch.Interface, err error) {
+		gvr := action.GetResource()
+		ns := action.GetNamespace()
+		watch, err := o.Watch(gvr, ns)
+		if err != nil {
+			return false, nil, err
+		}
+		return true, watch, nil
+	})
+
+	return cs
+}
+```
+
+`kubeactions` 和 `actions` 是用来记录期望观测到的，作用在 `client` 与 `kubeclient` 上的调用。Action 的定义如下所示：
+
+```go
+type Action interface {
+	GetNamespace() string
+	GetVerb() string
+	GetResource() schema.GroupVersionResource
+	GetSubresource() string
+	Matches(verb, resource string) bool
+
+	// DeepCopy is used to copy an action to avoid any risk of accidental mutation.  Most people never need to call this
+	// because the invocation logic deep copies before calls to storage and reactors.
+	DeepCopy() Action
+}
+
+type GetAction interface {
+	Action
+	GetName() string
+}
+
+type CreateAction interface {
+	Action
+	GetObject() runtime.Object
+}
+
+type UpdateAction interface {
+	Action
+	GetObject() runtime.Object
+}
+// ...
+```
+
+一个 Action 实例描述的是发生在 `clientset` 上的一次调用，其中包括 GET 请求操作（`GetAction`），创建操作（`CreateAction`），更新操作（`UpdateAction`）等。通过定义期望的 Action，在单元测试中可以检查 clientset 是否发起了与期望一致的请求。
+
+##### 利用 fixture 实现测试用例
 
 接下来，以一个 Foo Operator 的测试用例为例，介绍一下如何使用 fixture 实现单元测试用例：
 
